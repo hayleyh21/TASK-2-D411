@@ -6,11 +6,16 @@ try {
 
     # Check if database exists
     $databaseExists = Invoke-Sqlcmd -ServerInstance $sqlServerInstanceName -Query "SELECT name FROM sys.databases WHERE name = '$databaseName'"
-    
+
     if ($databaseExists) {
         Write-Host "Database '$databaseName' exists. Deleting database..."
-        # Delete the existing database if it exists
-        Invoke-Sqlcmd -ServerInstance $sqlServerInstanceName -Query "DROP DATABASE $databaseName"
+
+        # Force disconnect all users and drop the database
+        $dropDbScript = @"
+        ALTER DATABASE [$databaseName] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;
+        DROP DATABASE [$databaseName];
+"@
+        Invoke-Sqlcmd -ServerInstance $sqlServerInstanceName -Query $dropDbScript
         Write-Host "Database '$databaseName' deleted successfully."
     } else {
         Write-Host "Database '$databaseName' does not exist."
@@ -18,6 +23,7 @@ try {
 } catch {
     Write-Host "An error occurred while checking or deleting the database: $_"
 }
+
 
 # D2: Create a new database
 try {
