@@ -132,5 +132,20 @@ foreach ($ADuser in $NewAD) {
 # The ADResults.txt file includes all of the rows and attributes in the OU.
 Get-ADUser -Filter * -SearchBase "OU=Finance,DC=consultingfirm,DC=com" -Properties DisplayName,PostalCode,OfficePhone,MobilePhone > "$PSScriptRoot\AdResults.txt"
 
+# E: Exception handling for system out of memory and other general errors
+try {
+    Write-Host "Attempting to retrieve AD users from the Finance OU..."
+
+    # Generate the output file AdResults.txt
+    $adUsers = Get-ADUser -Filter * -SearchBase "OU=Finance,DC=consultingfirm,DC=com" -Properties DisplayName,PostalCode,OfficePhone,MobilePhone
+    $adUsers | Out-File "$PSScriptRoot\AdResults.txt"
+
+    Write-Host "AD user data successfully written to AdResults.txt"
+} catch [System.OutOfMemoryException] {
+    Write-Host "A system out of memory exception has occurred while retrieving AD user data. :("
+} catch {
+    Write-Host "An error occurred that could not be resolved while retrieving AD user data: $_"
+}
+
 # F: Restore-AD.ps1 Script
 # Accurate screenshots are provided for each action in the script.
