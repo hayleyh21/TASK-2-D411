@@ -1,0 +1,136 @@
+Restore SQL
+# D1: Check if the database exists
+try {
+    $sqlServerInstanceName = ".\SQLEXPRESS"
+    $databaseName = "ClientDB"
+
+    # Check if database exists
+    $databaseExists = Invoke-Sqlcmd -ServerInstance $sqlServerInstanceName -Query "SELECT name FROM sys.databases WHERE name = '$databaseName'"
+    
+    if ($databaseExists) {
+        Write-Host "Database '$databaseName' exists. Deleting database..."
+        # Delete the existing database if it exists
+        Invoke-Sqlcmd -ServerInstance $sqlServerInstanceName -Query "DROP DATABASE $databaseName"
+        Write-Host "Database '$databaseName' deleted successfully."
+    } else {
+        Write-Host "Database '$databaseName' does not exist."
+    }
+} catch {
+    Write-Host "An error occurred while checking or deleting the database: $_"
+}
+
+# D2: Create a new database
+try {
+    Write-Host "Creating database '$databaseName'..."
+    $createDatabaseScript = "CREATE DATABASE $databaseName"
+    Invoke-Sqlcmd -ServerInstance $sqlServerInstanceName -Query $createDatabaseScript
+    Write-Host "Database '$databaseName' created successfully."
+} catch {
+    Write-Host "An error occurred while creating the database: $_"
+}
+
+# D3: Create the Client_A_Contacts table
+try {
+    Write-Host "Creating table 'Client_A_Contacts'..."
+    $createTableScript = @"
+    IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'Client_A_Contacts')
+    BEGIN
+        CREATE TABLE [$databaseName].[dbo].[Client_A_Contacts] (
+            first_name VARCHAR(30),
+            last_name VARCHAR(30),
+            city VARCHAR(30),
+            county VARCHAR(30),
+            zip VARCHAR(30),
+            officePhone VARCHAR(30),
+            mobilePhone VARCHAR(30)
+        );
+        PRINT 'Table Client_A_Contacts created successfully.'
+    END
+    ELSE
+    BEGIN
+        PRINT 'Table Client_A_Contacts already exists.'
+    END
+"@
+    Invoke-Sqlcmd -ServerInstance $sqlServerInstanceName -Database $databaseName -Query $createTableScript
+} catch {
+    Write-Host "An error occurred while creating the table: $_"
+}
+
+# D4: Insert data from the CSV file
+try {
+    $csvPath = Join-Path $PSScriptRoot "NewClientData.csv"
+    $insertScript = @"
+    BULK INSERT [$databaseName].[dbo].[Client_A_Contacts]
+    FROM '$csvPath'
+    WITH (FORMAT = 'CSV', FIRSTROW = 2)
+"@
+    Write-Host "Inserting data from '$csvPath' into 'Client_A_Contacts'..."
+    Invoke-Sqlcmd -ServerInstance $sqlServerInstanceName -Database $databaseName -Query $insertScript
+    Write-Host "Data has been inserted into 'Client_A_Contacts'."
+} catch {
+    Write-Host "An error occurred while inserting data: $_"
+}
+
+# E: Exception handling for system out of memory and other general errors
+try {
+    Write-Host "Attempting to run a query to get all data from the table..."
+
+    # Generate the output file SqlResults.txt
+    $sqlQuery = "SELECT * FROM dbo.Client_A_Contacts"
+    Invoke-Sqlcmd -ServerInstance $sqlServerInstanceName -Database $databaseName -Query $sqlQuery | Out-File .\SqlResults.txt
+    Write-Host "Query result written to SqlResults.txt."
+} catch [System.OutOfMemoryException] {
+    Write-Host "A system out of memory exception has occurred. :("
+} catch {
+    Write-Host "An error occurred that could not be resolved: $_"
+}
+
+# F1: Final step: run the script from the console and take a screenshot of the output
+
+
+
+
+
+
+Restore-AD.ps1 - Active Directory Management
+
+# A: Script AD Creation
+# The PowerShell script is created within the “Requirements2” folder and includes a comment block that includes the first and last name and student ID number.
+
+# B1: Active Directory Finance OU Output
+# The script checks for the existence of an Active Directory Organizational Unit (OU) named “Finance” and outputs a message of its existence.
+$newOU = "OU=Finance,DC=consultingfirm,DC=com"
+if ([adsi]::Exists("LDAP://$newOU")) {
+    Write-Host "$newOU already exists. Deleting and recreating"
+    Remove-ADOrganizationalUnit -Identity $newOU -Recursive -Confirm:$false
+}
+
+# B2: Active Directory Finance OU
+# The script successfully creates an OU named “Finance” and a message is output to the console that it was created.
+New-ADOrganizationalUnit -Name Finance -ProtectedFromAccidentalDeletion $False
+Write-Host "Created $newOU"
+
+# B3: Data Insertion
+# The script imports the correct file including all rows and attributes into the correct OU.
+$NewAD = Import-CSV "$PSScriptRoot\financePersonnel.csv"
+foreach ($ADuser in $NewAD) {
+    $First = $ADUser.First_Name
+    $Last = $ADUser.Last_Name
+    $Name = "$First $Last"
+    $SamName = $ADUser.samAccount
+    $Postal = $ADUser.PostalCode
+    $Office = $ADUser.OfficePhone
+    $Mobile = $ADUser.MobilePhone
+    
+    # Create new AD User
+    New-AdUser -GivenName $First -Surname $Last -Name $Name -SamAccountName $SamName `
+    -DisplayName $Name -PostalCode $Postal -MobilePhone $Mobile -OfficePhone $Office `
+    -Path $newOU
+}
+
+# B4: Verify AD Object
+# The ADResults.txt file includes all of the rows and attributes in the OU.
+Get-ADUser -Filter * -SearchBase "OU=Finance,DC=consultingfirm,DC=com" -Properties DisplayName,PostalCode,OfficePhone,MobilePhone > "$PSScriptRoot\AdResults.txt"
+
+# F: Restore-AD.ps1 Script
+# Accurate screenshots are provided for each action in the script.
